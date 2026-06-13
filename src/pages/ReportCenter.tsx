@@ -1,14 +1,15 @@
 
 import { useState } from 'react';
 import { useAppStore } from '../store/appStore';
-import { Plus, Download, Edit3, Eye, Check, X } from 'lucide-react';
+import { Plus, Download, Edit3, Eye, Mail, Check, X, Save, FileText } from 'lucide-react';
 
 export default function ReportCenter() {
-  const { clients, reports, createReport } = useAppStore();
+  const { clients, reports, createReport, updateReport, sendReportSummary } = useAppStore();
   const [selectedClient, setSelectedClient] = useState<string>('');
   const [showModal, setShowModal] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [editingReport, setEditingReport] = useState<string | null>(null);
-  const [newReport, setNewReport] = useState({
+  const [editingContent, setEditingContent] = useState({
     strengths: [''],
     limitations: [''],
     recommendations: [''],
@@ -16,28 +17,33 @@ export default function ReportCenter() {
     explorationTasks: [''],
     summary: '',
   });
+  const [previewReport, setPreviewReport] = useState<typeof reports[0] | null>(null);
 
-  const handleAddField = (field: keyof typeof newReport) => {
-    if (Array.isArray(newReport[field])) {
-      setNewReport((prev) => ({
+  const clientReports = selectedClient
+    ? reports.filter((r) => r.clientId === selectedClient)
+    : reports;
+
+  const handleAddField = (field: keyof typeof editingContent) => {
+    if (Array.isArray(editingContent[field])) {
+      setEditingContent((prev) => ({
         ...prev,
         [field]: [...(prev[field] as string[]), ''],
       }));
     }
   };
 
-  const handleUpdateField = (field: keyof typeof newReport, index: number, value: string) => {
-    if (Array.isArray(newReport[field])) {
-      const updated = [...(newReport[field] as string[])];
+  const handleUpdateField = (field: keyof typeof editingContent, index: number, value: string) => {
+    if (Array.isArray(editingContent[field])) {
+      const updated = [...(editingContent[field] as string[])];
       updated[index] = value;
-      setNewReport((prev) => ({ ...prev, [field]: updated }));
+      setEditingContent((prev) => ({ ...prev, [field]: updated }));
     }
   };
 
-  const handleRemoveField = (field: keyof typeof newReport, index: number) => {
-    if (Array.isArray(newReport[field]) && (newReport[field] as string[]).length > 1) {
-      const updated = (newReport[field] as string[]).filter((_, i) => i !== index);
-      setNewReport((prev) => ({ ...prev, [field]: updated }));
+  const handleRemoveField = (field: keyof typeof editingContent, index: number) => {
+    if (Array.isArray(editingContent[field]) && (editingContent[field] as string[]).length > 1) {
+      const updated = (editingContent[field] as string[]).filter((_, i) => i !== index);
+      setEditingContent((prev) => ({ ...prev, [field]: updated }));
     }
   };
 
@@ -45,22 +51,28 @@ export default function ReportCenter() {
     if (!selectedClient) return;
     
     const filteredReport = {
-      ...newReport,
-      strengths: newReport.strengths.filter(Boolean),
-      limitations: newReport.limitations.filter(Boolean),
-      recommendations: newReport.recommendations.filter(Boolean),
-      careerDirections: newReport.careerDirections.filter(Boolean),
-      explorationTasks: newReport.explorationTasks.filter(Boolean),
+      ...editingContent,
+      strengths: editingContent.strengths.filter(Boolean),
+      limitations: editingContent.limitations.filter(Boolean),
+      recommendations: editingContent.recommendations.filter(Boolean),
+      careerDirections: editingContent.careerDirections.filter(Boolean),
+      explorationTasks: editingContent.explorationTasks.filter(Boolean),
     };
 
-    createReport({
-      clientId: selectedClient,
-      counselorId: 'c1',
-      content: filteredReport,
-    });
+    if (editingReport) {
+      updateReport(editingReport, filteredReport);
+    } else {
+      createReport({
+        clientId: selectedClient,
+        counselorId: 'c1',
+        content: filteredReport,
+        sendStatus: 'draft',
+      });
+    }
 
     setShowModal(false);
-    setNewReport({
+    setEditingReport(null);
+    setEditingContent({
       strengths: [''],
       limitations: [''],
       recommendations: [''],
@@ -68,6 +80,40 @@ export default function ReportCenter() {
       explorationTasks: [''],
       summary: '',
     });
+  };
+
+  const handleEditReport = (report: typeof reports[0]) => {
+    setEditingReport(report.id);
+    setEditingContent({
+      strengths: report.content.strengths.length > 0 ? report.content.strengths : [''],
+      limitations: report.content.limitations.length > 0 ? report.content.limitations : [''],
+      recommendations: report.content.recommendations.length > 0 ? report.content.recommendations : [''],
+      careerDirections: report.content.careerDirections.length > 0 ? report.content.careerDirections : [''],
+      explorationTasks: report.content.explorationTasks.length > 0 ? report.content.explorationTasks : [''],
+      summary: report.content.summary,
+    });
+    setShowModal(true);
+  };
+
+  const handlePreviewReport = (report: typeof reports[0]) => {
+    setPreviewReport(report);
+    setShowPreviewModal(true);
+  };
+
+  const handleSendSummary = (reportId: string) => {
+    sendReportSummary(reportId);
+  };
+
+  const handleExportReport = (report: typeof reports[0]) => {
+    const content = `职业诊断报告\n\n来访者: ${clients.find(c => c.id === report.clientId)?.name}\n版本: ${report.version}\n生成时间: ${report.generatedAt}\n\n【核心优势】\n${report.content.strengths.join('\n- ')}\n\n【限制因素】\n${report.content.limitations.join('\n- ')}\n\n【职业建议】\n${report.content.recommendations.join('\n- ')}\n\n【推荐职业方向】\n${report.content.careerDirections.join('\n- ')}\n\n【探索任务】\n${report.content.explorationTasks.join('\n- ')}\n\n【报告摘要】\n${report.content.summary}`;
+    
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `诊断报告_${report.clientId}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -93,7 +139,7 @@ export default function ReportCenter() {
       </div>
 
       <div className="grid grid-cols-2 gap-6">
-        {reports.map((report) => {
+        {clientReports.map((report) => {
           const client = clients.find((c) => c.id === report.clientId);
           return (
             <div key={report.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
@@ -108,18 +154,46 @@ export default function ReportCenter() {
                       <p className="text-sm text-gray-500">版本 {report.version} · {report.generatedAt}</p>
                     </div>
                   </div>
+                  {report.sendStatus === 'sent' && (
+                    <div className="flex items-center gap-1 mt-2 text-sm text-green-600">
+                      <Check className="w-4 h-4" />
+                      <span>摘要已发送 ({report.sentAt})</span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                  <button
+                    onClick={() => handlePreviewReport(report)}
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
                     <Eye className="w-4 h-4" />
                     <span>预览</span>
                   </button>
-                  <button className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                  <button
+                    onClick={() => handleEditReport(report)}
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
                     <Edit3 className="w-4 h-4" />
+                    <span>编辑</span>
                   </button>
-                  <button className="flex items-center gap-1 px-3 py-1.5 text-sm bg-accent-500 text-white rounded-lg hover:bg-accent-600 transition-colors">
+                  <button
+                    onClick={() => handleExportReport(report)}
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm bg-accent-500 text-white rounded-lg hover:bg-accent-600 transition-colors"
+                  >
                     <Download className="w-4 h-4" />
                     <span>导出</span>
+                  </button>
+                  <button
+                    onClick={() => handleSendSummary(report.id)}
+                    disabled={report.sendStatus === 'sent'}
+                    className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                      report.sendStatus === 'sent'
+                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        : 'bg-blue-500 text-white hover:bg-blue-600'
+                    }`}
+                  >
+                    <Mail className="w-4 h-4" />
+                    <span>发送摘要</span>
                   </button>
                 </div>
               </div>
@@ -159,8 +233,8 @@ export default function ReportCenter() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto">
           <div className="bg-white rounded-xl p-8 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold text-gray-800">生成诊断报告</h3>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
+              <h3 className="text-xl font-semibold text-gray-800">{editingReport ? '编辑诊断报告' : '生成诊断报告'}</h3>
+              <button onClick={() => { setShowModal(false); setEditingReport(null); }} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -183,7 +257,7 @@ export default function ReportCenter() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">优势因素</label>
                 <div className="space-y-2">
-                  {newReport.strengths.map((item, index) => (
+                  {editingContent.strengths.map((item, index) => (
                     <div key={index} className="flex items-center gap-2">
                       <input
                         type="text"
@@ -192,7 +266,7 @@ export default function ReportCenter() {
                         className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                         placeholder="输入优势..."
                       />
-                      {newReport.strengths.length > 1 && (
+                      {editingContent.strengths.length > 1 && (
                         <button onClick={() => handleRemoveField('strengths', index)} className="p-2 text-gray-400 hover:text-red-500">
                           <X className="w-5 h-5" />
                         </button>
@@ -209,7 +283,7 @@ export default function ReportCenter() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">限制因素</label>
                 <div className="space-y-2">
-                  {newReport.limitations.map((item, index) => (
+                  {editingContent.limitations.map((item, index) => (
                     <div key={index} className="flex items-center gap-2">
                       <input
                         type="text"
@@ -218,7 +292,7 @@ export default function ReportCenter() {
                         className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                         placeholder="输入限制因素..."
                       />
-                      {newReport.limitations.length > 1 && (
+                      {editingContent.limitations.length > 1 && (
                         <button onClick={() => handleRemoveField('limitations', index)} className="p-2 text-gray-400 hover:text-red-500">
                           <X className="w-5 h-5" />
                         </button>
@@ -235,7 +309,7 @@ export default function ReportCenter() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">职业建议</label>
                 <div className="space-y-2">
-                  {newReport.recommendations.map((item, index) => (
+                  {editingContent.recommendations.map((item, index) => (
                     <div key={index} className="flex items-center gap-2">
                       <input
                         type="text"
@@ -244,7 +318,7 @@ export default function ReportCenter() {
                         className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                         placeholder="输入建议..."
                       />
-                      {newReport.recommendations.length > 1 && (
+                      {editingContent.recommendations.length > 1 && (
                         <button onClick={() => handleRemoveField('recommendations', index)} className="p-2 text-gray-400 hover:text-red-500">
                           <X className="w-5 h-5" />
                         </button>
@@ -261,7 +335,7 @@ export default function ReportCenter() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">推荐职业方向</label>
                 <div className="space-y-2">
-                  {newReport.careerDirections.map((item, index) => (
+                  {editingContent.careerDirections.map((item, index) => (
                     <div key={index} className="flex items-center gap-2">
                       <input
                         type="text"
@@ -270,7 +344,7 @@ export default function ReportCenter() {
                         className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                         placeholder="输入职业方向..."
                       />
-                      {newReport.careerDirections.length > 1 && (
+                      {editingContent.careerDirections.length > 1 && (
                         <button onClick={() => handleRemoveField('careerDirections', index)} className="p-2 text-gray-400 hover:text-red-500">
                           <X className="w-5 h-5" />
                         </button>
@@ -287,7 +361,7 @@ export default function ReportCenter() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">探索任务</label>
                 <div className="space-y-2">
-                  {newReport.explorationTasks.map((item, index) => (
+                  {editingContent.explorationTasks.map((item, index) => (
                     <div key={index} className="flex items-center gap-2">
                       <input
                         type="text"
@@ -296,7 +370,7 @@ export default function ReportCenter() {
                         className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                         placeholder="输入任务..."
                       />
-                      {newReport.explorationTasks.length > 1 && (
+                      {editingContent.explorationTasks.length > 1 && (
                         <button onClick={() => handleRemoveField('explorationTasks', index)} className="p-2 text-gray-400 hover:text-red-500">
                           <X className="w-5 h-5" />
                         </button>
@@ -313,8 +387,8 @@ export default function ReportCenter() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">报告摘要</label>
                 <textarea
-                  value={newReport.summary}
-                  onChange={(e) => setNewReport({ ...newReport, summary: e.target.value })}
+                  value={editingContent.summary}
+                  onChange={(e) => setEditingContent({ ...editingContent, summary: e.target.value })}
                   rows={4}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
                   placeholder="请输入报告摘要..."
@@ -323,7 +397,7 @@ export default function ReportCenter() {
 
               <div className="flex justify-end gap-3 pt-4">
                 <button
-                  onClick={() => setShowModal(false)}
+                  onClick={() => { setShowModal(false); setEditingReport(null); }}
                   className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   取消
@@ -332,8 +406,117 @@ export default function ReportCenter() {
                   onClick={handleSubmit}
                   className="flex items-center gap-2 px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
                 >
-                  <Check className="w-4 h-4" />
-                  <span>生成报告</span>
+                  <Save className="w-4 h-4" />
+                  <span>{editingReport ? '保存修改' : '生成报告'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPreviewModal && previewReport && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto">
+          <div className="bg-white rounded-xl p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center">
+                  <FileText className="w-6 h-6 text-primary-600" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-800">诊断报告预览</h3>
+                  <p className="text-sm text-gray-500">版本 {previewReport.version}</p>
+                </div>
+              </div>
+              <button onClick={() => setShowPreviewModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-6">
+              <div className="text-center py-4 border-b border-gray-200">
+                <h2 className="text-xl font-bold text-gray-800">职业诊断报告</h2>
+                <p className="text-sm text-gray-500 mt-2">来访者: {clients.find(c => c.id === previewReport.clientId)?.name}</p>
+                <p className="text-xs text-gray-400">生成时间: {previewReport.generatedAt}</p>
+              </div>
+              
+              <div>
+                <h4 className="text-lg font-semibold text-gray-800 mb-3">一、核心优势</h4>
+                <ul className="space-y-2">
+                  {previewReport.content.strengths.map((item, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 bg-accent-500 rounded-full mt-2"></span>
+                      <span className="text-gray-700">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              
+              <div>
+                <h4 className="text-lg font-semibold text-gray-800 mb-3">二、限制因素</h4>
+                <ul className="space-y-2">
+                  {previewReport.content.limitations.map((item, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 bg-orange-500 rounded-full mt-2"></span>
+                      <span className="text-gray-700">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              
+              <div>
+                <h4 className="text-lg font-semibold text-gray-800 mb-3">三、职业建议</h4>
+                <ul className="space-y-2">
+                  {previewReport.content.recommendations.map((item, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-2"></span>
+                      <span className="text-gray-700">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              
+              <div>
+                <h4 className="text-lg font-semibold text-gray-800 mb-3">四、推荐职业方向</h4>
+                <div className="flex flex-wrap gap-2">
+                  {previewReport.content.careerDirections.map((item, i) => (
+                    <span key={i} className="px-4 py-2 bg-primary-50 text-primary-700 rounded-lg">
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <h4 className="text-lg font-semibold text-gray-800 mb-3">五、探索任务</h4>
+                <ul className="space-y-2">
+                  {previewReport.content.explorationTasks.map((item, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full mt-2"></span>
+                      <span className="text-gray-700">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <h4 className="text-lg font-semibold text-gray-800 mb-3">报告摘要</h4>
+                <p className="text-gray-700">{previewReport.content.summary}</p>
+              </div>
+              
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  onClick={() => setShowPreviewModal(false)}
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  关闭
+                </button>
+                <button
+                  onClick={() => handleExportReport(previewReport)}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>导出报告</span>
                 </button>
               </div>
             </div>

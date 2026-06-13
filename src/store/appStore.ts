@@ -1,17 +1,17 @@
 
 import { create } from 'zustand';
-import { Client, AssessmentScale, AssessmentResult, Interview, Report, Task, Appointment, KanbanItem, DashboardStats } from '../types';
-import { mockClients, mockScales, mockAssessmentResults, mockInterviews, mockReports, mockTasks, mockAppointments, mockKanbanItems } from '../data/mockData';
+import { Client, AssessmentScale, AssessmentResult, AssessmentDelivery, Interview, Report, Task, Appointment, KanbanItem, DashboardStats, KanbanColumn } from '../types';
+import { mockClients, mockScales, mockAssessmentResults, mockInterviews, mockReports, mockTasks, mockAppointments } from '../data/mockData';
 
 interface AppState {
   clients: Client[];
   scales: AssessmentScale[];
   assessmentResults: AssessmentResult[];
+  assessmentDeliveries: AssessmentDelivery[];
   interviews: Interview[];
   reports: Report[];
   tasks: Task[];
   appointments: Appointment[];
-  kanbanItems: KanbanItem[];
   
   selectedClientId: string | null;
   
@@ -24,6 +24,8 @@ interface AppState {
   // Assessment actions
   getAssessmentResultsByClient: (clientId: string) => AssessmentResult[];
   createAssessmentResult: (result: Omit<AssessmentResult, 'id'>) => void;
+  deliverAssessment: (clientId: string, scaleId: string) => void;
+  getAssessmentDeliveriesByClient: (clientId: string) => AssessmentDelivery[];
   
   // Interview actions
   getInterviewsByClient: (clientId: string) => Interview[];
@@ -34,6 +36,7 @@ interface AppState {
   getReportByClient: (clientId: string) => Report | undefined;
   createReport: (report: Omit<Report, 'id' | 'version' | 'generatedAt'>) => void;
   updateReport: (id: string, content: Report['content']) => void;
+  sendReportSummary: (id: string) => void;
   
   // Task actions
   getTasksByClient: (clientId: string) => Task[];
@@ -44,9 +47,12 @@ interface AppState {
   getAppointmentsByClient: (clientId: string) => Appointment[];
   addAppointment: (appointment: Omit<Appointment, 'id'>) => void;
   updateAppointment: (id: string, updates: Partial<Appointment>) => void;
+  startConsultation: (id: string) => void;
+  cancelAppointment: (id: string) => void;
   
   // Kanban actions
-  updateKanbanItemStatus: (id: string, status: KanbanItem['status']) => void;
+  getKanbanItems: () => KanbanItem[];
+  updateKanbanItemStatus: (id: string, status: KanbanColumn) => void;
   
   // Dashboard stats
   getStats: () => DashboardStats;
@@ -56,11 +62,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   clients: mockClients,
   scales: mockScales,
   assessmentResults: mockAssessmentResults,
+  assessmentDeliveries: [],
   interviews: mockInterviews,
-  reports: mockReports,
+  reports: mockReports.map(r => ({ ...r, sendStatus: 'draft' as const })),
   tasks: mockTasks,
   appointments: mockAppointments,
-  kanbanItems: mockKanbanItems,
   selectedClientId: null,
   
   addClient: (client) => set((state) => ({
@@ -98,6 +104,31 @@ export const useAppStore = create<AppState>((set, get) => ({
     }],
   })),
   
+  deliverAssessment: (clientId, scaleId) => {
+    const url = `https://example.com/assessment/${clientId}/${scaleId}/${Date.now()}`;
+    set((state) => ({
+      assessmentDeliveries: [...state.assessmentDeliveries, {
+        id: `ad-${Date.now()}`,
+        clientId,
+        scaleId,
+        url,
+        deliveredAt: new Date().toISOString().split('T')[0],
+        status: 'sent',
+      }],
+    }));
+    return url;
+  },
+  
+  getAssessmentDeliveriesByClient: (clientId) => {
+    const { assessmentDeliveries, scales } = get();
+    return assessmentDeliveries
+      .filter((d) => d.clientId === clientId)
+      .map((d) => ({
+        ...d,
+        scale: scales.find((s) => s.id === d.scaleId),
+      }));
+  },
+  
   getInterviewsByClient: (clientId) => {
     const { interviews } = get();
     return interviews.filter((i) => i.clientId === clientId);
@@ -125,6 +156,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       id: `r-${Date.now()}`,
       version: 1,
       generatedAt: new Date().toISOString().split('T')[0],
+      sendStatus: 'draft',
     }],
   })),
   
@@ -132,6 +164,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     reports: state.reports.map((r) =>
       r.id === id
         ? { ...r, content, version: r.version + 1 }
+        : r
+    ),
+  })),
+  
+  sendReportSummary: (id) => set((state) => ({
+    reports: state.reports.map((r) =>
+      r.id === id
+        ? { ...r, sentAt: new Date().toISOString().split('T')[0], sendStatus: 'sent' }
         : r
     ),
   })),
@@ -178,11 +218,59 @@ export const useAppStore = create<AppState>((set, get) => ({
     ),
   })),
   
-  updateKanbanItemStatus: (id, status) => set((state) => ({
-    kanbanItems: state.kanbanItems.map((item) =>
-      item.id === id ? { ...item, status } : item
+  startConsultation: (id) => set((state) => ({
+    appointments: state.appointments.map((a) =>
+      a.id === id ? { ...a, status: 'completed' as const } : a
     ),
   })),
+  
+  cancelAppointment: (id) => set((state) => ({
+    appointments: state.appointments.map((a) =>
+      a.id === id ? { ...a, status: 'cancelled' as const } : a
+    ),
+  })),
+  
+  getKanbanItems: () => {
+    const { tasks, appointments, clients } = get();
+    const items: KanbanItem[] = [];
+    
+    tasks.forEach((task) => {
+      const client = clients.find((c) => c.id === task.clientId);
+      items.push({
+        id: task.id,
+        title: task.title,
+        clientName: client?.name || '',
+        type: 'task',
+        dueDate: task.deadline,
+        status: task.status,
+      });
+    });
+    
+    appointments.forEach((appt) => {
+      if (appt.status === 'scheduled') {
+        const client = clients.find((c) => c.id === appt.clientId);
+        items.push({
+          id: appt.id,
+          title: '职业咨询预约',
+          clientName: client?.name || '',
+          type: 'appointment',
+          dueDate: appt.datetime.split(' ')[0],
+          status: 'pending',
+        });
+      }
+    });
+    
+    return items;
+  },
+  
+  updateKanbanItemStatus: (id: string, status: KanbanColumn) => {
+    const { tasks } = get();
+    const task = tasks.find((t) => t.id === id);
+    
+    if (task) {
+      get().updateTaskStatus(id, status);
+    }
+  },
   
   getStats: () => {
     const { clients, tasks, appointments, assessmentResults } = get();

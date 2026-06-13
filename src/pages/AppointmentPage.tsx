@@ -4,7 +4,7 @@ import { useAppStore } from '../store/appStore';
 import { Plus, Calendar, Clock, CheckCircle, XCircle, Save, X } from 'lucide-react';
 
 export default function AppointmentPage() {
-  const { clients, appointments, addAppointment } = useAppStore();
+  const { clients, appointments, addAppointment, startConsultation, cancelAppointment } = useAppStore();
   const [selectedClient, setSelectedClient] = useState<string>('');
   const [showModal, setShowModal] = useState(false);
   const [newAppointment, setNewAppointment] = useState({
@@ -100,10 +100,16 @@ export default function AppointmentPage() {
                     <div className="flex items-center gap-2">
                       {appt.status === 'scheduled' && (
                         <>
-                          <button className="px-3 py-1.5 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
+                          <button
+                            onClick={() => startConsultation(appt.id)}
+                            className="px-3 py-1.5 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                          >
                             开始咨询
                           </button>
-                          <button className="px-3 py-1.5 text-sm bg-gray-200 text-gray-600 rounded-lg hover:bg-gray-300 transition-colors">
+                          <button
+                            onClick={() => cancelAppointment(appt.id)}
+                            className="px-3 py-1.5 text-sm bg-gray-200 text-gray-600 rounded-lg hover:bg-gray-300 transition-colors"
+                          >
                             取消
                           </button>
                         </>

@@ -97,6 +97,7 @@ export const mockReports: Report[] = [
     },
     version: 1,
     generatedAt: '2024-02-05',
+    sendStatus: 'draft',
   },
   {
     id: 'r2',
@@ -112,6 +113,7 @@ export const mockReports: Report[] = [
     },
     version: 1,
     generatedAt: '2024-02-08',
+    sendStatus: 'draft',
   },
 ];
 

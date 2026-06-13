@@ -22,7 +22,8 @@ const typeLabels = {
 };
 
 export default function KanbanBoard() {
-  const { kanbanItems, updateKanbanItemStatus } = useAppStore();
+  const { getKanbanItems, updateKanbanItemStatus } = useAppStore();
+  const kanbanItems = getKanbanItems();
 
   const handleDragStart = (e: React.DragEvent, item: KanbanItem) => {
     e.dataTransfer.setData('itemId', item.id);

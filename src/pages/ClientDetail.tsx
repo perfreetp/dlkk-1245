@@ -1,9 +1,10 @@
 
 import { useAppStore } from '../store/appStore';
-import { ArrowLeft, Mail, Phone, Calendar, FileText, ClipboardList, Target } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Calendar, FileText, ClipboardList, Target, Link, Send } from 'lucide-react';
+import { AssessmentScale } from '../types';
 
 export default function ClientDetail({ clientId, onBack }: { clientId: string; onBack: () => void }) {
-  const { clients, getAssessmentResultsByClient, getInterviewsByClient, getTasksByClient, getAppointmentsByClient, getReportByClient } = useAppStore();
+  const { clients, getAssessmentResultsByClient, getInterviewsByClient, getTasksByClient, getAppointmentsByClient, getReportByClient, getAssessmentDeliveriesByClient } = useAppStore();
   
   const client = clients.find((c) => c.id === clientId);
   const assessments = getAssessmentResultsByClient(clientId);
@@ -11,6 +12,7 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
   const tasks = getTasksByClient(clientId);
   const appointments = getAppointmentsByClient(clientId);
   const report = getReportByClient(clientId);
+  const deliveries = getAssessmentDeliveriesByClient(clientId);
 
   if (!client) return null;
 
@@ -117,25 +119,59 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
       </div>
 
       <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">最近测评</h3>
-          {assessments.length > 0 ? (
-            <div className="space-y-4">
-              {assessments.slice(0, 3).map((assessment) => (
-                <div key={assessment.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-medium text-gray-800">{assessment.scale?.name}</p>
-                    <p className="text-sm text-gray-500">完成于 {assessment.completedAt}</p>
+        <div className="col-span-2 space-y-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">测评发放记录</h3>
+            {deliveries.length > 0 ? (
+              <div className="space-y-4">
+                {deliveries.map((delivery: typeof deliveries[0] & { scale?: AssessmentScale }) => (
+                  <div key={delivery.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Send className="w-4 h-4 text-gray-400" />
+                        <p className="font-medium text-gray-800">{delivery.scale?.name}</p>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Link className="w-3 h-3 text-gray-400" />
+                        <span className="text-sm text-gray-500 truncate max-w-xs">{delivery.url}</span>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">发放于 {delivery.deliveredAt}</p>
+                    </div>
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      delivery.status === 'completed' ? 'bg-green-100 text-green-700' :
+                      delivery.status === 'sent' ? 'bg-blue-100 text-blue-700' :
+                      'bg-red-100 text-red-700'
+                    }`}>
+                      {delivery.status === 'completed' ? '已完成' : delivery.status === 'sent' ? '已发送' : '已过期'}
+                    </span>
                   </div>
-                  <span className="px-3 py-1 bg-accent-100 text-accent-700 rounded-full text-sm font-medium">
-                    得分: {assessment.score}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-500 text-center py-8">暂无测评记录</p>
-          )}
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center py-8">暂无测评发放记录</p>
+            )}
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">最近测评</h3>
+            {assessments.length > 0 ? (
+              <div className="space-y-4">
+                {assessments.slice(0, 3).map((assessment) => (
+                  <div key={assessment.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div>
+                      <p className="font-medium text-gray-800">{assessment.scale?.name}</p>
+                      <p className="text-sm text-gray-500">完成于 {assessment.completedAt}</p>
+                    </div>
+                    <span className="px-3 py-1 bg-accent-100 text-accent-700 rounded-full text-sm font-medium">
+                      得分: {assessment.score}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center py-8">暂无测评记录</p>
+            )}
+          </div>
         </div>
         
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">

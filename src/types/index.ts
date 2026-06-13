@@ -42,6 +42,16 @@ export interface AssessmentResult {
   scale?: AssessmentScale;
 }
 
+export interface AssessmentDelivery {
+  id: string;
+  clientId: string;
+  scaleId: string;
+  url: string;
+  deliveredAt: string;
+  status: 'sent' | 'completed' | 'expired';
+  completedAt?: string;
+}
+
 export interface Interview {
   id: string;
   clientId: string;
@@ -58,6 +68,8 @@ export interface Report {
   content: ReportContent;
   version: number;
   generatedAt: string;
+  sentAt?: string;
+  sendStatus: 'draft' | 'sent';
 }
 
 export interface ReportContent {
